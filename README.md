@@ -128,39 +128,45 @@ Basic statistics (complaints count, status)
 hostel_complaint_portal/
 │
 ├── config/
-│   └── db.js
+│   └── db.js                 # MongoDB connection configuration
 │
 ├── keys/
-│   ├── private.pem
-│   └── public.pem
+│   ├── private.pem           # RSA private key (signing)
+│   └── public.pem            # RSA public key (verification)
 │
 ├── models/
-│   ├── User.js
-│   ├── Complaint.js
-│   └── OTP.js
+│   ├── User.js               # User schema (user / admin / worker)
+│   ├── Complaint.js          # Complaint schema (encrypted data)
+│   └── OTP.js                # OTP schema (email verification)
 │
 ├── routes/
-│   ├── auth.js
-│   └── complaint.js
+│   ├── auth.js               # Authentication routes (register, login, OTP, JWT)
+│   └── complaint.js          # Complaint routes (user, admin, worker actions)
 │
 ├── utils/
-│   ├── cryptoUtils.js
-│   └── emailService.js
+│   ├── cryptoUtils.js        # AES encryption, RSA signing, hashing
+│   └── emailService.js       # OTP email service (Nodemailer)
 │
 ├── public/
-│   ├── index.html      (Login / Register)
-│   ├── user.html       (User Dashboard)
-│   ├── admin.html      (Admin Dashboard)
-│   ├── worker.html     (Worker Dashboard)
-│   ├── css/style.css
-│   └── js/utils.js
+│   ├── index.html            # Login & Registration page
+│   ├── user.html             # User dashboard (submit & view complaints)
+│   ├── admin.html            # Admin dashboard (assign complaints)
+│   ├── worker.html           # Worker dashboard (update complaint status)
+│   │
+│   ├── css/
+│   │   └── style.css         # Unified green-themed UI styles
+│   │
+│   └── js/
+│       └── utils.js          # Frontend helper functions (fetch, JWT handling)
 │
-├── server.js
-├── test-qr.js
-├── .env
-├── .gitignore
-├── package.json
-└── README.md
+├── server.js                 # Main backend server (Express + JWT + AES + RSA)
+├── test-qr.js                # QR code testing utility
+├── .env                      # Environment variables (ignored in Git)
+├── .gitignore                # Git ignore rules
+├── package.json              # Project dependencies
+├── package-lock.json         # Dependency lock file
+└── README.md                 # Project documentation
+
 
 ⚙️ Technologies Used
 Category	Technology
