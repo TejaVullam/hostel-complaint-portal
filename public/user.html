@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <header>
+        <div class="container">
+            <h1>Student Dashboard - <span id="usernameDisplay"></span></h1>
+            <nav>
+                <button onclick="logout()">Logout</button>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('view')">My Complaints</div>
+            <div class="tab" onclick="switchTab('new')">New Complaint</div>
+        </div>
+
+        <!-- NEW COMPLAINT FORM -->
+        <div id="newComplaintSection" style="display: none;">
+            <div class="auth-box" style="margin: 0; max-width: 600px;">
+                <h2>Submit Complaint</h2>
+                <form id="complaintForm">
+                    <div class="form-group">
+                        <label>Title</label>
+                        <input type="text" id="title" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="category">
+                            <option value="Plumbing">Plumbing</option>
+                            <option value="Electrical">Electrical</option>
+                            <option value="Furniture">Furniture</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Description (Will be Encrypted)</label>
+                        <textarea id="description" rows="5" required></textarea>
+                    </div>
+                    <button type="submit">Submit & Encrypt</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- LIST COMPLAINTS -->
+        <div id="viewComplaintSection">
+            <div id="complaintList">
+                <p>Loading complaints...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/utils.js"></script>
+    <script>
+        checkAuthRedirect(['user']);
+        document.getElementById('usernameDisplay').textContent = localStorage.getItem('username');
+
+        function switchTab(tab) {
+            if (tab === 'new') {
+                document.getElementById('newComplaintSection').style.display = 'block';
+                document.getElementById('viewComplaintSection').style.display = 'none';
+                document.querySelectorAll('.tab')[1].classList.add('active');
+                document.querySelectorAll('.tab')[0].classList.remove('active');
+            } else {
+                document.getElementById('newComplaintSection').style.display = 'none';
+                document.getElementById('viewComplaintSection').style.display = 'block';
+                document.querySelectorAll('.tab')[0].classList.add('active');
+                document.querySelectorAll('.tab')[1].classList.remove('active');
+                loadComplaints();
+            }
+        }
+
+        async function loadComplaints() {
+            const listDiv = document.getElementById('complaintList');
+            listDiv.innerHTML = '<p>Loading...</p>';
+
+            const res = await authFetch('/complaints/my-complaints');
+            if (res && res.ok) {
+                const complaints = await res.json();
+                if (complaints.length === 0) {
+                    listDiv.innerHTML = '<p>No complaints submitted yet.</p>';
+                    return;
+                }
+
+                listDiv.innerHTML = complaints.map(c => `
+                    <div class="card">
+                        <div style="display:flex; justify-content:space-between;">
+                            <h3>${c.title} <span class="badge ${c.status}">${c.status}</span></h3>
+                            <small>${new Date(c.createdAt).toLocaleDateString()}</small>
+                        </div>
+                        <p class="meta">Category: ${c.category}</p>
+                        <p><strong>Description:</strong> ${c.description}</p>
+                        ${c.qrCode ? `
+                            <div style="display:flex; flex-direction:column; align-items:center; margin-top:15px; background:#f0f0f0; padding:10px; border-radius:8px;">
+                                <p style="margin:0 0 5px 0;"><strong>Scan Ticket (QR):</strong></p>
+                                <img src="${c.qrCode}" alt="Complaint QR" style="width:120px; border:2px solid #ccc;">
+
+                                <!-- 2. BASE64 (Copy) -->
+                                <p style="margin:10px 0 5px 0;"><strong>Encoded Ticket (Base64):</strong></p>
+                                <textarea readonly style="width:100%; height:50px; font-family:monospace; font-size:0.75rem;">${c.encodedTicket || ''}</textarea>
+                                <p style="font-size:0.7rem; color:#666;">Copy string to Verify in Admin Panel</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            } else {
+                listDiv.innerHTML = '<p>Error loading complaints.</p>';
+            }
+        }
+
+        document.getElementById('complaintForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('title').value;
+            const category = document.getElementById('category').value;
+            const description = document.getElementById('description').value;
+
+            const res = await authFetch('/complaints/submit', {
+                method: 'POST',
+                body: JSON.stringify({ title, category, description })
+            });
+
+            if (res && res.ok) {
+                alert('Complaint Submitted Successfully!');
+                document.getElementById('complaintForm').reset();
+                switchTab('view');
+            } else {
+                alert('Submission Failed');
+            }
+        });
+
+        // Initial Load
+        loadComplaints();
+    </script>
+</body>
+
+</html>

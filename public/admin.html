@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .charts-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .chart-box {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            width: 48%;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        @media(max-width: 700px) {
+            .chart-box {
+                width: 100%;
+                margin-bottom: 1rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="container">
+            <h1>Warden Dashboard - Admin</h1>
+            <nav>
+                <button onclick="logout()">Logout</button>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- CHARTS SECTION -->
+        <div class="charts-container">
+            <div class="chart-box">
+                <canvas id="statusChart"></canvas>
+            </div>
+            <div class="chart-box">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+
+        <!-- DECODER SECTION -->
+        <div class="card" style="margin-bottom: 2rem; border-left: 5px solid var(--primary-color);">
+            <h3>🔍 Verify Encoded Ticket (Rubric: Decoding)</h3>
+            <p>Paste the Base64 string from a student's dashboard to decode and verify it.</p>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <input type="text" id="ticketInput" placeholder="Paste Base64 encoded string here..." style="flex:1;">
+                <button onclick="decodeTicket()" style="width: auto;">Decode</button>
+            </div>
+            <div id="decodeResult" style="margin-top:10px; font-family: monospace; font-weight: bold; color: #333;">
+            </div>
+        </div>
+
+        <h2>All Complaints</h2>
+        <div id="adminList">
+            <p>Loading...</p>
+        </div>
+    </div>
+
+    <script src="js/utils.js"></script>
+    <script>
+        checkAuthRedirect(['admin']);
+
+        function decodeTicket() {
+            const input = document.getElementById('ticketInput').value.trim();
+            const resultDiv = document.getElementById('decodeResult');
+
+            if (!input) {
+                resultDiv.textContent = 'Please enter a ticket string.';
+                resultDiv.style.color = 'red';
+                return;
+            }
+
+            try {
+                // Browser native Base64 decoding
+                const decoded = atob(input);
+                resultDiv.innerHTML = `<span style="color:green;">✔ Decoded Successfully:</span> <br> ${decoded}`;
+                resultDiv.style.color = '#333';
+            } catch (e) {
+                resultDiv.textContent = '✘ Invalid Base64 String';
+                resultDiv.style.color = 'red';
+            }
+        }
+
+        async function loadAllComplaints() {
+            const listDiv = document.getElementById('adminList');
+            const res = await authFetch('/complaints/all');
+
+            if (res && res.ok) {
+                const complaints = await res.json();
+                if (complaints.length === 0) {
+                    listDiv.innerHTML = '<p>No complaints found.</p>';
+                    return;
+                }
+
+                listDiv.innerHTML = complaints.map(c => `
+                    <div class="card">
+                        <h3>${c.title} <span class="badge ${c.status}">${c.status}</span></h3>
+                        <p class="meta">
+                            By: <strong>${c.createdBy.username}</strong> | 
+                            Category: ${c.category} | 
+                            Date: ${new Date(c.createdAt).toLocaleString()}
+                        </p>
+                        
+                        <div style="background: #f9f9f9; padding: 10px; border-radius: 4px; border-left: 3px solid #333;">
+                            <p><strong>Decrypted Description:</strong> ${c.description}</p>
+                            <span class="verification-badge ${c.isSignatureValid ? 'verified-sig' : 'invalid-sig'}">
+                                ${c.isSignatureValid ? '✔ Digital Signature Verified' : '✘ Digital Signature Invalid'}
+                            </span>
+                        </div>
+
+                        <div class="admin-controls">
+                            ${c.status === 'Pending' ? `
+                                <form onsubmit="assignWorker(event, '${c._id}')">
+                                    <label>Assign to Worker (Username):</label>
+                                    <div style="display:flex; gap: 10px;">
+                                        <input type="text" name="workerUser" placeholder="Worker Username" required>
+                                        <button type="submit" style="margin:0; width: auto;">Assign</button>
+                                    </div>
+                                </form>
+                            ` : `
+                                <p><strong>Assigned To:</strong> ${c.assignedTo ? c.assignedTo.username : 'N/A'}</p>
+                            `}
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function assignWorker(e, id) {
+            e.preventDefault();
+            const workerUsername = e.target.workerUser.value;
+
+            const res = await authFetch(`/complaints/assign/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ workerUsername })
+            });
+
+            if (res) {
+                const data = await res.json();
+                alert(data.msg);
+                if (res.ok) {
+                    loadAllComplaints();
+                    loadStats(); // Refresh stats
+                }
+            }
+        }
+
+        async function loadStats() {
+            const res = await authFetch('/complaints/stats');
+            if (res && res.ok) {
+                const data = await res.json();
+
+                // Process Data for Charts
+                const statusData = { Pending: 0, Assigned: 0, Resolved: 0, Rejected: 0 };
+                data.statusCounts.forEach(i => statusData[i._id] = i.count);
+
+                const categoryData = { Plumbing: 0, Electrical: 0, Furniture: 0, Other: 0 };
+                data.categoryCounts.forEach(i => categoryData[i._id] = i.count);
+
+                renderChart('statusChart', 'Complaint Status', Object.keys(statusData), Object.values(statusData),
+                    ['#f0ad4e', '#5bc0de', '#5cb85c', '#d9534f']);
+
+                renderChart('categoryChart', 'Complaints by Category', Object.keys(categoryData), Object.values(categoryData),
+                    ['#007bff', '#ffc107', '#28a745', '#6c757d']);
+            }
+        }
+
+        let chartInstances = {};
+
+        function renderChart(canvasId, label, labels, data, colors) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+
+            if (chartInstances[canvasId]) {
+                chartInstances[canvasId].destroy();
+            }
+
+            chartInstances[canvasId] = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        backgroundColor: colors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        title: { display: true, text: label }
+                    }
+                }
+            });
+        }
+
+        loadAllComplaints();
+        loadStats();
+    </script>
+</body>
+
+</html>
